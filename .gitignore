@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+results/checkpoints/
+results/figures/
+*.egg-info/
+.env
+venv/
+.ipynb_checkpoints/
