@@ -32,6 +32,9 @@ def download_data(cfg: DataConfig) -> Dict[str, pd.DataFrame]:
             progress=False,
             auto_adjust=True,
         )
+        # Flatten multi-index columns if yfinance returns them
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         # Keep only OHLC
         df = df[["Open", "High", "Low", "Close"]].dropna()
         data[ticker] = df
@@ -79,14 +82,14 @@ class StockReturnDataset(Dataset):
         self.scaler = scaler
         norm = scaler.transform(raw)                              # (N_days, F)
 
-        close_raw = price_df["Close"].values.astype(np.float64)  # raw close for return calc
+        close_raw = price_df["Close"].values.astype(np.float64).flatten()  # (N_days,)
 
         X_list, y_list = [], []
         for t in range(T, len(raw) - d_max):
             window = norm[t - T: t]                               # (T, F)
-            p_t = close_raw[t - 1]                                # close at time t
+            p_t = float(close_raw[t - 1])                         # close at time t
             returns = np.array(
-                [(close_raw[t - 1 + d] - p_t) / p_t for d in cfg.horizons],
+                [(float(close_raw[t - 1 + d]) - p_t) / p_t for d in cfg.horizons],
                 dtype=np.float32,
             )
             X_list.append(window)
@@ -134,13 +137,13 @@ class StockRollingDataset(Dataset):
         self.scaler = scaler
         norm = scaler.transform(raw)
 
-        close_raw = price_df["Close"].values.astype(np.float64)
+        close_raw = price_df["Close"].values.astype(np.float64).flatten()
 
         X_list, y_list = [], []
         # Need at least l extra days after d_max to compute rolling average
         for t in range(T, len(raw) - d_max - l + 1):
             window = norm[t - T: t]
-            p_t = close_raw[t - 1]
+            p_t = float(close_raw[t - 1])
             returns = []
             for d in cfg.horizons:
                 # prices p_{t+d}, p_{t+d-1}, ..., p_{t+d-l+1}
@@ -194,16 +197,16 @@ class TurningPointDataset(Dataset):
         self.scaler = scaler
         norm = scaler.transform(raw)
 
-        close_raw = price_df["Close"].values.astype(np.float64)
-        high_raw  = price_df["High"].values.astype(np.float64)
+        close_raw = price_df["Close"].values.astype(np.float64).flatten()
+        high_raw  = price_df["High"].values.astype(np.float64).flatten()
 
         X_list, y_list = [], []
         for t in range(T, len(raw) - d_max):
             window = norm[t - T: t]
-            p_t = close_raw[t - 1]
+            p_t = float(close_raw[t - 1])
             buy = 0
             for d in cfg.horizons:
-                p_max = high_raw[t - 1 + d]
+                p_max = float(high_raw[t - 1 + d])
                 if (p_max - p_t) / p_t > gamma:
                     buy = 1
                     break
